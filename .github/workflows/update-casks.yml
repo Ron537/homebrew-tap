@@ -1,0 +1,59 @@
+name: Update casks
+
+# Token-free cask auto-updater. Runs inside the tap, so the default GITHUB_TOKEN
+# already has write access here — no personal access token / secret needed.
+# For each app it reads the latest PUBLIC GitHub release and bumps that cask's
+# version + sha256 to match.
+on:
+  schedule:
+    - cron: "0 */6 * * *" # every 6 hours
+  workflow_dispatch: # run manually for an immediate update after a release
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-casks
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync casks to latest releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          # bump <cask-token> <owner/repo> <asset-name-regex>
+          bump() {
+            cask="$1"; repo="$2"; asset="$3"
+            tag=$(gh release view --repo "$repo" --json tagName --jq .tagName)
+            ver="${tag#v}"
+            sha=$(curl -fsSL "https://github.com/$repo/releases/download/$tag/SHA256SUMS.txt" \
+                    | awk -v p="$asset" '$2 ~ p {print $1}' | head -1)
+            if [ -z "$sha" ]; then
+              echo "::warning::$cask: could not read sha256 for $tag"; return 0
+            fi
+            cur=$(awk -F'"' '/^  version /{print $2; exit}' "Casks/$cask.rb")
+            echo "$cask: current=$cur latest=$ver sha=$sha"
+            if [ "$cur" = "$ver" ]; then echo "$cask already up to date"; return 0; fi
+            sed -i -E "s|^  version \".*\"|  version \"$ver\"|" "Casks/$cask.rb"
+            sed -i -E "s|^  sha256 \".*\"|  sha256 \"$sha\"|" "Casks/$cask.rb"
+            echo "$cask: bumped $cur -> $ver"
+          }
+
+          bump cliplex Ron537/Cliplex 'Cliplex-.*\.dmg'
+          # bump dplex Ron537/DPlex 'DPlex-.*\.dmg'   # enable when DPlex ships a DMG + SHA256SUMS
+
+          if git diff --quiet; then
+            echo "All casks up to date."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Update casks to latest releases"
+          git push
