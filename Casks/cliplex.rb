@@ -1,6 +1,6 @@
 cask "cliplex" do
-  version "0.1.0"
-  sha256 "8cc06cedbb62988240ed8efb35d22d8f353d2121867cca5b526d3f12694a1539"
+  version "0.2.0"
+  sha256 "2c4e1e894944050869e24f2e3695262642832c86d31cb2519537a5ca1ce5a975"
 
   url "https://github.com/Ron537/Cliplex/releases/download/v#{version}/Cliplex-#{version}.dmg"
   name "Cliplex"
